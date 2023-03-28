@@ -1,0 +1,59 @@
+---
+- name: Bootstrap Cluster
+  hosts: all
+  become: yes
+  become_method: sudo
+  vars:
+    ansible_python_interpreter: /bin/python3
+    k3s_tools: /var/lib/rancher/k3s/data/current/bin/
+  tasks:
+    - name: Check if k3s is installed.
+      ansible.builtin.stat: 
+        path: /etc/systemd/system/k3s.service
+      register: k3s_installed
+
+    - name: Install k3s
+      ansible.builtin.shell: |
+        curl -sfL https://get.k3s.io | INSTALL_K3S_EXEC="--disable traefik --disable=service-lb" sh -s -
+      when: k3s_installed.stat.exists is not true
+
+    - name: Update /etc/environment to add k3s utilities to PATH.
+      ansible.builtin.lineinfile:
+        dest: /etc/environment
+        line: "PATH={{ k3s_tools }}:$PATH"
+
+    - name: Wait for node ready status.
+      ansible.builtin.shell: |
+        kubectl wait --for=condition=Ready nodes --all --timeout=180s
+
+    - name: Permit traffic to k3s ports.
+      ansible.posix.firewalld:
+        port: "{{ item }}"
+        immediate: true
+        permanent: true
+        state: enabled
+      loop:
+        - '22/tcp'
+        - '80/tcp'
+        - '443/tcp'
+        - '2376/tcp'
+        - '2379/tcp'
+        - '2380/tcp'
+        - '6443/tcp'
+        - '8472/udp'
+        - '9099/tcp'
+        - '10250/tcp'
+        - '10254/tcp'
+        - '30000-32767/tcp'
+        - '30000-32767/udp'
+
+    - name: Download MetalLB manifest to the cluster.
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/metallb/metallb/v0.13.9/config/manifests/metallb-native.yaml
+        dest: /tmp/metallb-native.yaml
+        mode: "0664"
+
+    - name: Install MetalLB on the node.
+      kubernetes.core.k8s:
+        state: present
+        src: /tmp/metallb-native.yaml
