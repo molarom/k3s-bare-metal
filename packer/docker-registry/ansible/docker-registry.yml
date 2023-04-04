@@ -1,0 +1,28 @@
+---
+- name: Bootstrap Docker Registry
+  hosts: localhost
+  become: true
+  become_method: sudo
+  tasks:
+    - name: Start the docker daemon.
+      ansible.builtin.systemd:
+        name: docker
+        state: started
+
+    - name: Create the registry directories.
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - '/registry'
+        - '/registry/docker_mirror_cache'
+        - '/registry/docker_mirror_certs'
+
+    - name: Pull and start the registry-proxy container.
+      ansible.builtin.shell: |
+        bash -c 'docker run --rm --name docker_registry_proxy -d \
+        -p 0.0.0.0:3128:3128 -e ENABLE_MANIFEST_CACHE=true \
+        -v /registry/docker_mirror_cache:/docker_mirror_cache \
+        -v /registry/docker_mirror_certs:/ca \
+        rpardini/docker-registry-proxy:0.6.2'

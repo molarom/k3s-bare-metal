@@ -42,9 +42,9 @@ source "proxmox-iso" "rocky-k3s-server" {
 
     # VM General Settings
     node                 = "proxmox-srv"
-    vm_id                = "101"
-    vm_name              = "rocky-k3s-server"
-    template_description = "Rocky Linux K3s Server Image"
+    vm_id                = "100"
+    vm_name              = "rocky-docker-registry"
+    template_description = "Rocky Linux Docker Registry Image"
 
     # VM ISO Settings
     iso_url             = "https://download.rockylinux.org/pub/rocky/8/isos/x86_64/Rocky-8.7-x86_64-minimal.iso"
@@ -64,7 +64,7 @@ source "proxmox-iso" "rocky-k3s-server" {
     scsi_controller = "virtio-scsi-pci"
     
     disks {
-        disk_size         = "20G"
+        disk_size         = "35G"
         format            = "raw"
         storage_pool      = "local-lvm"
         type              = "virtio"
@@ -96,12 +96,16 @@ build {
                            "yum -y install epel-release", 
                            "yum repolist", 
                            "yum -y install ansible",
+                           "yum -y install yum-utils",
+                           "yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo",
+                           "yum -y install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin",
+                           "pip3 install docker"
                           ]
     }
     
     provisioner "ansible-local" {
         playbook_dir  = "ansible"
-        playbook_file = "ansible/k3s.yml"
+        playbook_file = "ansible/docker-registry.yml"
         galaxy_file = "ansible/requirements.yml"
         extra_arguments = [
                         "-e \"ansible_sudo_pass=${var.sudo-password}\"",

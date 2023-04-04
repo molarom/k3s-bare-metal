@@ -1,10 +1,9 @@
 ---
 - name: Bootstrap Cluster
-  hosts: all
+  hosts: localhost
   become: yes
   become_method: sudo
   vars:
-    ansible_python_interpreter: /bin/python3
     k3s_tools: /var/lib/rancher/k3s/data/current/bin/
   tasks:
     - name: Check if k3s is installed.
@@ -25,6 +24,15 @@
     - name: Wait for node ready status.
       ansible.builtin.shell: |
         kubectl wait --for=condition=Ready nodes --all --timeout=180s
+
+    - name: Copy Kubeconfig to user's home directory.
+      ansible.builtin.copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: "/home/{{ ansible_user }}/k3s.yaml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        remote_src: true
+        mode: '0644'
 
     - name: Permit traffic to k3s ports.
       ansible.posix.firewalld:
@@ -47,13 +55,3 @@
         - '30000-32767/tcp'
         - '30000-32767/udp'
 
-    - name: Download MetalLB manifest to the cluster.
-      ansible.builtin.get_url:
-        url: https://raw.githubusercontent.com/metallb/metallb/v0.13.9/config/manifests/metallb-native.yaml
-        dest: /tmp/metallb-native.yaml
-        mode: "0664"
-
-    - name: Install MetalLB on the node.
-      kubernetes.core.k8s:
-        state: present
-        src: /tmp/metallb-native.yaml
